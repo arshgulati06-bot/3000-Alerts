@@ -27,6 +27,7 @@ export default function AttackTimeline({ events = [] }) {
                     {ev.severity || 'high'}
                   </span>
                   <strong style={{ color: '#fff', fontSize: '13px' }}>{ev.event}</strong>
+                  {ev.mitre && <span className="mitre-tag">{ev.mitre}</span>}
                 </div>
                 <div className="timeline-time">{ev.time}</div>
               </div>
@@ -41,9 +42,9 @@ export default function AttackTimeline({ events = [] }) {
                 margin: '6px 0',
                 fontFamily: 'var(--font-mono)'
               }}>
-                <span style={{ color: '#38bdf8' }}>{ev.source_ip || '10.0.0.10'}</span>
+                <span style={{ color: '#38bdf8' }}>{ev.source_ip || '—'}</span>
                 <ArrowRight size={12} color="var(--text-dim)" />
-                <span style={{ color: '#a855f7' }}>{ev.destination_ip || '10.0.0.12'}</span>
+                <span style={{ color: '#a855f7' }}>{ev.destination_ip || '—'}</span>
                 {ev.asset && (
                   <span style={{ 
                     marginLeft: 'auto', 

@@ -18,8 +18,7 @@ export default function IncidentsPage({ incidents = [], onSelectIncident, onUpda
   const filtered = incidents.filter(inc => {
     if (filterTab === 'critical' && inc.severity !== 'critical') return false;
     if (filterTab === 'high' && inc.severity !== 'high' && inc.severity !== 'critical') return false;
-    if (filterTab === 'investigating' && inc.status !== 'investigating') return false;
-    if (filterTab === 'resolved' && inc.status !== 'resolved') return false;
+    if (['new', 'investigating', 'contained', 'resolved'].includes(filterTab) && inc.status !== filterTab) return false;
 
     if (search) {
       const q = search.toLowerCase();
@@ -60,8 +59,10 @@ export default function IncidentsPage({ incidents = [], onSelectIncident, onUpda
         }}>
           {[
             { id: 'all', label: 'All Incidents' },
-            { id: 'critical', label: 'Critical Only' },
-            { id: 'investigating', label: 'Under Investigation' },
+            { id: 'critical', label: 'Critical' },
+            { id: 'new', label: 'New' },
+            { id: 'investigating', label: 'Investigating' },
+            { id: 'contained', label: 'Contained' },
             { id: 'resolved', label: 'Resolved' },
           ].map(tab => (
             <button

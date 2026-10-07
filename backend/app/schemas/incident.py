@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field
 from backend.app.schemas.investigation import InvestigationResponse
 
@@ -89,3 +89,11 @@ class IncidentListResponse(BaseModel):
     page: int = Field(..., description="Current page number")
     page_size: int = Field(..., description="Number of items per page")
     total_pages: int = Field(..., description="Total available pages")
+
+
+class IncidentStatusUpdate(BaseModel):
+    """Payload for transitioning an incident's workflow status."""
+
+    status: Literal["open", "new", "investigating", "contained", "resolved", "closed"] = Field(
+        ..., description="New workflow status", examples=["contained"]
+    )

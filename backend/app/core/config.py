@@ -17,6 +17,12 @@ class Settings(BaseSettings):
     # Default to standard PostgreSQL connection format; allows overriding via env
     DATABASE_URL: str = "postgresql+psycopg2://postgres:password@localhost:5432/sworders_soc"
 
+    # Demo safety nets: fall back to a local SQLite file if PostgreSQL is
+    # unreachable, and seed clearly simulated data into an empty database.
+    DEMO_DB_FALLBACK: bool = True
+    DEMO_FALLBACK_URL: str = "sqlite:///./sworders_demo.db"
+    SEED_DEMO_DATA: bool = True
+
     # Azure OpenAI settings (Future Phase 4)
     AZURE_OPENAI_ENDPOINT: Optional[str] = None
     AZURE_OPENAI_API_KEY: Optional[str] = None

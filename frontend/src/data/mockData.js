@@ -99,7 +99,7 @@ export const MOCK_INCIDENTS = [
       { key: "External C2 Destination", value: "185.220.101.44:8443 (Tor Exit Node / Bulletproof Host)" },
     ],
     ai_investigation: {
-      summary: "Autonomous AI correlation identified an active Multi-Stage Intrusion progressing from Execution (T1059.001) to Credential Access (T1003.001) and Lateral Movement (T1021.002) on primary file server SERVER-01.",
+      summary: "Correlation analysis identified an active Multi-Stage Intrusion progressing from Execution (T1059.001) to Credential Access (T1003.001) and Lateral Movement (T1021.002) on primary file server SERVER-01.",
       observed_evidence: [
         "Base64-encoded PowerShell script injected into memory from source IP 10.0.0.45.",
         "Attempted memory extraction of LSASS process memory targeting plaintext Kerberos tickets.",

@@ -25,7 +25,7 @@ export default function Sidebar({ currentTab, onSelectTab, criticalCount = 2, to
       items: [
         { id: 'alerts', label: 'Alert Queue', icon: Radio, badge: '3.1k', badgeType: 'info' },
         { id: 'incidents', label: 'Incidents', icon: Flame, badge: criticalCount > 0 ? `${criticalCount} CRIT` : null, badgeType: 'critical' },
-        { id: 'investigation', label: 'Investigation Sandbox', icon: Microscope, badge: null },
+        { id: 'investigation', label: 'Investigation Workspace', icon: Microscope, badge: null },
       ],
     },
     {

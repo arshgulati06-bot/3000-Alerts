@@ -1,13 +1,75 @@
 import { MOCK_ALERTS_STREAM, MOCK_INCIDENTS, MOCK_KPIS } from '../data/mockData';
 
 const API_BASE_URL = '/api';
+const TIMEOUT_MS = 5000;
+
+/** fetch with timeout so a hung backend never freezes the UI */
+async function apiFetch(path, options = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  try {
+    return await fetch(`${API_BASE_URL}${path}`, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Map backend status vocabulary onto the analyst workflow: NEW → INVESTIGATING → CONTAINED → RESOLVED */
+export function normalizeStatus(status) {
+  const s = (status || 'new').toLowerCase();
+  if (s === 'open') return 'new';
+  if (s === 'closed') return 'resolved';
+  return s;
+}
+
+/**
+ * Backend incidents carry the persisted fields (status, risk, MITRE, AI investigation).
+ * Presentation-only enrichment (title, timeline, risk factors) is joined by incident_key
+ * from the demo dataset until the correlation engine produces it server-side.
+ */
+function enrichIncident(apiIncident) {
+  const base = MOCK_INCIDENTS.find(m => m.incident_key === apiIncident.incident_key) || {};
+  const inv = apiIncident.investigations?.[0];
+  const merged = {
+    ...base,
+    ...Object.fromEntries(Object.entries(apiIncident).filter(([, v]) => v !== null && v !== undefined)),
+    title: base.title || apiIncident.summary?.slice(0, 80) || apiIncident.incident_key,
+    severity: base.severity || apiIncident.priority || 'medium',
+    timeline: base.timeline || [],
+    evidence: (inv?.evidence?.length && typeof inv.evidence[0] === 'object') ? inv.evidence : (base.evidence || []),
+  };
+  if (inv) {
+    merged.ai_investigation = {
+      ...(base.ai_investigation || {}),
+      summary: inv.summary || base.ai_investigation?.summary,
+      attack_path: inv.attack_path?.length ? inv.attack_path : base.ai_investigation?.attack_path,
+      recommendations: inv.recommendations?.length ? inv.recommendations : base.ai_investigation?.recommendations,
+    };
+  }
+  merged.status = normalizeStatus(merged.status);
+  return merged;
+}
+
+/** Update incident workflow status (PATCH /api/incidents/{id}). Returns true if persisted. */
+export async function updateIncidentStatus(id, status) {
+  try {
+    const res = await apiFetch(`/incidents/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Check backend health status
  */
 export async function checkHealth() {
   try {
-    const res = await fetch(`${API_BASE_URL}/health`, {
+    const res = await apiFetch(`/health`, {
       method: 'GET',
       headers: { 'Accept': 'application/json' },
     });
@@ -33,17 +95,19 @@ export async function fetchAlerts(params = {}) {
     if (params.event_type) query.append('event_type', params.event_type);
     if (params.asset_id) query.append('asset_id', params.asset_id);
 
-    const res = await fetch(`${API_BASE_URL}/alerts?${query.toString()}`);
+    const res = await apiFetch(`/alerts?${query.toString()}`);
     if (res.ok) {
       const json = await res.json();
       // If backend returns items, merge or use backend items; if empty (Phase 1 fresh db), provide rich dataset
-      const items = (json.items && json.items.length > 0) ? [...json.items, ...MOCK_ALERTS_STREAM] : MOCK_ALERTS_STREAM;
+      if (!Array.isArray(json.items)) throw new Error('Malformed /api/alerts response');
+      const live = json.items.length > 0;
+      const items = live ? json.items : MOCK_ALERTS_STREAM;
       return {
         items,
-        total: items.length,
+        total: live ? json.total : items.length,
         page: json.page || 1,
         page_size: json.page_size || 50,
-        isLive: true,
+        isLive: live,
       };
     }
   } catch (err) {
@@ -76,7 +140,7 @@ export async function fetchAlerts(params = {}) {
  */
 export async function ingestAlert(alertPayload) {
   try {
-    const res = await fetch(`${API_BASE_URL}/alerts`, {
+    const res = await apiFetch(`/alerts`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -105,18 +169,26 @@ export async function fetchIncidents(params = {}) {
     if (params.status) query.append('status', params.status);
     if (params.priority) query.append('priority', params.priority);
 
-    const res = await fetch(`${API_BASE_URL}/incidents?${query.toString()}`);
+    query.append('page_size', 200);
+    const res = await apiFetch(`/incidents?${query.toString()}`);
     if (res.ok) {
       const json = await res.json();
-      if (json.items && json.items.length > 0) {
-        return { items: json.items, isLive: true };
+      if (Array.isArray(json.items) && json.items.length > 0) {
+        // List endpoint omits investigations; fetch details in parallel for full context
+        const detailed = await Promise.all(json.items.map(async (inc) => {
+          try {
+            const d = await apiFetch(`/incidents/${inc.id}`);
+            return d.ok ? await d.json() : inc;
+          } catch { return inc; }
+        }));
+        return { items: detailed.map(enrichIncident).sort((a, b) => (b.risk_score || 0) - (a.risk_score || 0)), isLive: true };
       }
     }
   } catch (err) {
     console.warn('Backend /api/incidents query error, using local correlation dataset:', err.message);
   }
 
-  let list = [...MOCK_INCIDENTS];
+  let list = MOCK_INCIDENTS.map(i => ({ ...i, status: normalizeStatus(i.status) }));
   if (params.status && params.status !== 'all') {
     list = list.filter(i => i.status.toLowerCase() === params.status.toLowerCase());
   }
@@ -132,11 +204,11 @@ export async function fetchIncidents(params = {}) {
  */
 export async function fetchIncidentById(id) {
   try {
-    const res = await fetch(`${API_BASE_URL}/incidents/${id}`);
+    const res = await apiFetch(`/incidents/${id}`);
     if (res.ok) {
       const json = await res.json();
       if (json && json.id) {
-        return { incident: json, isLive: true };
+        return { incident: enrichIncident(json), isLive: true };
       }
     }
   } catch (err) {

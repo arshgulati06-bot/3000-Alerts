@@ -266,3 +266,34 @@ def test_get_incident_found(client):
     assert data["risk_score"] == 75.0
     assert data["priority"] == "high"
     assert data["investigations"] == []
+
+
+# ==============================================================================
+# Demo build additions: status workflow + demo seeding
+# ==============================================================================
+def test_update_incident_status(client):
+    """PATCH /api/incidents/{id} transitions the workflow status."""
+    db = TestingSessionLocal()
+    db.add(Incident(incident_key="INC-PATCH-1", status="open"))
+    db.commit()
+    incident_id = db.query(Incident).first().id
+    db.close()
+
+    response = client.patch(f"/api/incidents/{incident_id}", json={"status": "contained"})
+    assert response.status_code == 200
+    assert response.json()["status"] == "contained"
+
+    assert client.patch(f"/api/incidents/{incident_id}", json={"status": "bogus"}).status_code == 422
+    assert client.patch("/api/incidents/9999", json={"status": "resolved"}).status_code == 404
+
+
+def test_demo_seed_populates_empty_database():
+    """Demo seeding fills an empty DB once and never duplicates."""
+    from backend.app.services.demo_seed import seed_demo_data
+
+    db = TestingSessionLocal()
+    assert seed_demo_data(db) is True
+    assert db.query(Incident).count() == 6
+    assert db.query(Alert).count() > 100
+    assert seed_demo_data(db) is False
+    db.close()

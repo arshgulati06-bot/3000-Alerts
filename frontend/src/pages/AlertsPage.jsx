@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { EVENT_TECHNIQUE, MITRE_TECHNIQUES } from '../data/socKnowledge';
 import { 
   Radio, 
   Search, 
@@ -14,7 +15,13 @@ import {
   X
 } from 'lucide-react';
 
-export default function AlertsPage({ alerts = [], onOpenIngestModal }) {
+const PAGE_SIZE = 25;
+
+export default function AlertsPage({ alerts = [], incidents = [], isLive, onOpenIngestModal, onInvestigate }) {
+  const [sourceFilter, setSourceFilter] = useState('all');
+  const [page, setPage] = useState(1);
+  const sources = [...new Set(alerts.map(a => a.raw_data?.source).filter(Boolean))].sort();
+  const incidentFor = (alert) => incidents.find(i => i.asset_id && i.asset_id === alert?.asset_id);
   const [search, setSearch] = useState('');
   const [severityFilter, setSeverityFilter] = useState('all');
   const [eventTypeFilter, setEventTypeFilter] = useState('all');
@@ -49,6 +56,8 @@ export default function AlertsPage({ alerts = [], onOpenIngestModal }) {
     if (severityFilter === 'medium' && (alert.severity < 4 || alert.severity >= 7)) return false;
     if (severityFilter === 'low' && alert.severity > 3) return false;
 
+    if (sourceFilter !== 'all' && alert.raw_data?.source !== sourceFilter) return false;
+
     // Event type
     if (eventTypeFilter !== 'all' && !alert.event_type?.toLowerCase().includes(eventTypeFilter.toLowerCase())) {
       return false;
@@ -56,6 +65,10 @@ export default function AlertsPage({ alerts = [], onOpenIngestModal }) {
 
     return true;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filteredAlerts.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pageAlerts = filteredAlerts.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   const getSeverityBadgeClass = (sev) => {
     if (sev >= 9) return 'sev-badge sev-badge-critical';
@@ -111,7 +124,7 @@ export default function AlertsPage({ alerts = [], onOpenIngestModal }) {
             type="text"
             placeholder="Search by Alert ID, IP, Asset, User, Description..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             style={{
               width: '100%',
               background: 'var(--bg-surface-2)',
@@ -130,7 +143,7 @@ export default function AlertsPage({ alerts = [], onOpenIngestModal }) {
           <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: '700' }}>Severity:</span>
           <select
             value={severityFilter}
-            onChange={(e) => setSeverityFilter(e.target.value)}
+            onChange={(e) => { setSeverityFilter(e.target.value); setPage(1); }}
             style={{
               background: 'var(--bg-surface-2)',
               border: '1px solid var(--border-subtle)',
@@ -154,7 +167,7 @@ export default function AlertsPage({ alerts = [], onOpenIngestModal }) {
           <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: '700' }}>Category:</span>
           <select
             value={eventTypeFilter}
-            onChange={(e) => setEventTypeFilter(e.target.value)}
+            onChange={(e) => { setEventTypeFilter(e.target.value); setPage(1); }}
             style={{
               background: 'var(--bg-surface-2)',
               border: '1px solid var(--border-subtle)',
@@ -176,6 +189,15 @@ export default function AlertsPage({ alerts = [], onOpenIngestModal }) {
           </select>
         </div>
 
+        {sources.length > 0 && (
+          <select className="ws-select" value={sourceFilter} onChange={(e) => { setSourceFilter(e.target.value); setPage(1); }}>
+            <option value="all">All Sources</option>
+            {sources.map(src => <option key={src} value={src}>{src}</option>)}
+          </select>
+        )}
+
+        <span className={`ws-chip ${isLive ? 'ws-chip-live' : 'ws-chip-demo'}`}>{isLive ? 'LIVE · /api/alerts' : 'DEMO DATA'}</span>
+
         {/* Counter */}
         <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginLeft: 'auto', fontFamily: 'var(--font-mono)' }}>
           Showing {filteredAlerts.length} of {alerts.length} alerts
@@ -188,19 +210,19 @@ export default function AlertsPage({ alerts = [], onOpenIngestModal }) {
           <table className="soc-table">
             <thead>
               <tr>
-                <th style={{ width: '120px' }}>Alert ID</th>
-                <th style={{ width: '130px' }}>Timestamp (UTC)</th>
+                <th style={{ width: '110px' }}>Alert ID</th>
+                <th style={{ width: '100px' }}>Time (UTC)</th>
                 <th style={{ width: '90px' }}>Severity</th>
-                <th style={{ width: '180px' }}>Event Type</th>
+                <th style={{ width: '170px' }}>Detection Type</th>
                 <th>Description</th>
-                <th style={{ width: '220px' }}>Source → Destination</th>
-                <th style={{ width: '120px' }}>Asset ID</th>
-                <th style={{ width: '120px' }}>User Principal</th>
-                <th style={{ width: '60px' }}>Payload</th>
+                <th style={{ width: '200px' }}>Source → Destination</th>
+                <th style={{ width: '130px' }}>Asset ID</th>
+                <th style={{ width: '120px' }}>MITRE</th>
+                <th style={{ width: '110px' }}>Incident</th>
               </tr>
             </thead>
             <tbody>
-              {filteredAlerts.map((alert) => (
+              {pageAlerts.map((alert) => (
                 <tr key={alert.id || alert.external_alert_id} onClick={() => setSelectedAlert(alert)}>
                   {/* Alert ID */}
                   <td style={{ whiteSpace: 'nowrap' }}>
@@ -231,7 +253,7 @@ export default function AlertsPage({ alerts = [], onOpenIngestModal }) {
 
                   {/* Description */}
                   <td>
-                    <div style={{ color: '#e2e8f0', fontSize: '12px', maxWidth: '360px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div style={{ color: '#e2e8f0', fontSize: '12px', maxWidth: '170px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {alert.description || 'Normalized security alert payload'}
                     </div>
                   </td>
@@ -245,32 +267,45 @@ export default function AlertsPage({ alerts = [], onOpenIngestModal }) {
 
                   {/* Asset */}
                   <td>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', background: 'var(--bg-surface-2)', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--border-subtle)' }}>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', background: 'var(--bg-surface-2)', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--border-subtle)', whiteSpace: 'nowrap' }}>
                       {alert.asset_id || 'SERVER-01'}
                     </span>
                   </td>
 
                   {/* User */}
                   <td>
-                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                      {alert.user || 'SYSTEM'}
-                    </span>
+                    {EVENT_TECHNIQUE[alert.event_type]
+                      ? <span className="mitre-tag" title={MITRE_TECHNIQUES[EVENT_TECHNIQUE[alert.event_type]]?.name}>{EVENT_TECHNIQUE[alert.event_type]}</span>
+                      : <span className="ws-muted">—</span>}
                   </td>
 
                   {/* Raw JSON View Icon */}
                   <td>
-                    <button 
-                      style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
-                      title="Inspect Raw JSON"
-                    >
-                      <Code size={14} />
-                    </button>
+                    {incidentFor(alert) && alert.severity >= 5 ? (
+                      <button
+                        className="btn btn-primary btn-sm"
+                        style={{ padding: '3px 8px', fontSize: '11px' }}
+                        onClick={(e) => { e.stopPropagation(); onInvestigate(incidentFor(alert)); }}
+                        title="Open correlated incident in the investigation workspace"
+                      >
+                        Investigate
+                      </button>
+                    ) : (
+                      <span className="ws-muted">{alert.severity >= 5 ? 'Triage' : 'Noise'}</span>
+                    )}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+        {totalPages > 1 && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '8px', padding: '10px 16px', borderTop: '1px solid var(--border-subtle)' }}>
+            <button className="btn btn-secondary btn-sm" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>Prev</button>
+            <span className="ws-muted mono">Page {currentPage} / {totalPages}</span>
+            <button className="btn btn-secondary btn-sm" disabled={currentPage >= totalPages} onClick={() => setPage(currentPage + 1)}>Next</button>
+          </div>
+        )}
       </div>
 
       {/* Raw JSON Payload Modal / Drawer */}
@@ -329,9 +364,19 @@ export default function AlertsPage({ alerts = [], onOpenIngestModal }) {
             </div>
 
             <div className="modal-footer">
+              {EVENT_TECHNIQUE[selectedAlert.event_type] && (
+                <span className="mitre-tag" style={{ marginRight: 'auto' }}>
+                  {EVENT_TECHNIQUE[selectedAlert.event_type]} · {MITRE_TECHNIQUES[EVENT_TECHNIQUE[selectedAlert.event_type]]?.name}
+                </span>
+              )}
               <button className="btn btn-secondary btn-sm" onClick={() => setSelectedAlert(null)}>
                 Close
               </button>
+              {incidentFor(selectedAlert) && (
+                <button className="btn btn-primary btn-sm" onClick={() => { const inc = incidentFor(selectedAlert); setSelectedAlert(null); onInvestigate(inc); }}>
+                  Investigate {incidentFor(selectedAlert).incident_key} →
+                </button>
+              )}
             </div>
           </div>
         </div>

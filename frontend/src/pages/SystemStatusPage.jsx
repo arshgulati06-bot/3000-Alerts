@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { checkHealth } from '../services/api';
 
-export default function SystemStatusPage() {
+export default function SystemStatusPage({ dataSource = {}, alertCount = 0, incidentCount = 0 }) {
   const [healthData, setHealthData] = useState(null);
   const [isChecking, setIsChecking] = useState(false);
   const [latency, setLatency] = useState(null);
@@ -43,6 +43,7 @@ export default function SystemStatusPage() {
     { method: "GET", path: "/api/alerts", desc: "Query Ingested Telemetry with Severity/Asset Filters", status: 200 },
     { method: "GET", path: "/api/incidents", desc: "Correlated Security Incident List", status: 200 },
     { method: "GET", path: "/api/incidents/{id}", desc: "Incident Detail with Associated AI Investigation", status: 200 },
+    { method: "PATCH", path: "/api/incidents/{id}", desc: "Incident Workflow Transition (new → investigating → contained → resolved)", status: 200 },
   ];
 
   return (
@@ -135,6 +136,55 @@ export default function SystemStatusPage() {
       </div>
 
       {/* REST API Contract Verification Table */}
+      {/* Component status board — what a mentor checks first */}
+      {(() => {
+        const online = !!healthData?.connected;
+        const mode = healthData?.data?.mode;
+        const rows = [
+          ['Backend', online ? 'ONLINE' : 'OFFLINE', online, 'FastAPI + Uvicorn'],
+          ['API', online ? 'HEALTHY' : 'UNREACHABLE', online, latency != null ? `${latency} ms round-trip` : '—'],
+          ['Database', online ? (mode === 'demo-fallback' ? 'DEMO MODE (SQLite fallback)' : `CONNECTED (${healthData?.data?.database_engine || 'db'})`) : 'DEMO MODE (in-browser dataset)', online && mode !== 'demo-fallback', mode === 'demo-fallback' ? 'PostgreSQL unreachable → auto-fallback' : 'SQLAlchemy 2.x'],
+          ['Alert Ingestion', online ? 'OPERATIONAL' : 'SIMULATED', online, `${alertCount} alerts loaded${dataSource.alerts ? ' from API' : ' (demo)'}`],
+          ['Incident Engine', 'OPERATIONAL', true, `${incidentCount} incidents${dataSource.incidents ? ' from API' : ' (demo)'}`],
+          ['AI Analysis', healthData?.data?.ai_engine === 'azure-openai' ? 'AVAILABLE' : 'AVAILABLE · DEMO', true, 'Explainable rule-based engine; Azure OpenAI slot reserved'],
+        ];
+        return (
+          <div className="card-section">
+            <div className="card-section-header">
+              <div className="card-section-title"><CheckCircle2 size={15} color="var(--primary)" /><span>Component Status</span></div>
+              <span className={`ws-chip ${online ? 'ws-chip-live' : 'ws-chip-demo'}`}>{online ? 'LIVE BACKEND' : 'DEMO MODE'}</span>
+            </div>
+            <div style={{ padding: '8px 16px' }}>
+              {rows.map(([k, v, ok, note]) => (
+                <div key={k} className="dash-health">
+                  <span style={{ minWidth: '140px' }}><span className="dot" style={{ background: ok ? '#10b981' : '#eab308' }} />{k}</span>
+                  <span className="ws-muted" style={{ flex: 1 }}>{note}</span>
+                  <span className="mono" style={{ fontSize: '11px', fontWeight: 700, color: ok ? '#34d399' : '#facc15' }}>{v}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Architecture & scale-out path */}
+      <div className="card-section">
+        <div className="card-section-header">
+          <div className="card-section-title"><Layers size={15} color="var(--primary)" /><span>Architecture & Scalability Path</span></div>
+        </div>
+        <div style={{ padding: '16px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', fontSize: '12px' }}>
+          {['SIEM / EDR / Cloud / Identity', 'Ingestion API (FastAPI)', 'Normalization (Pydantic schema)', 'PostgreSQL', 'Correlation → Incidents', 'Risk + MITRE mapping', 'AI-assisted summary', 'Analyst workspace (React)'].map((step, i, arr) => (
+            <React.Fragment key={step}>
+              <span className="ws-chip" style={{ padding: '6px 10px', color: '#fff' }}>{step}</span>
+              {i < arr.length - 1 && <span style={{ color: 'var(--text-dim)' }}>→</span>}
+            </React.Fragment>
+          ))}
+          <div className="ws-muted" style={{ width: '100%', marginTop: '8px' }}>
+            Scale-out: stateless API replicas behind a load balancer · queue (Event Hubs / Kafka) in front of ingestion · managed PostgreSQL (Azure Database) · Azure OpenAI for summaries · Sentinel / Defender connectors as alert sources.
+          </div>
+        </div>
+      </div>
+
       <div className="card-section">
         <div className="card-section-header">
           <div className="card-section-title">

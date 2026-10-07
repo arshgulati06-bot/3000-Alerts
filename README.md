@@ -37,6 +37,32 @@ Security Operations Centers (SOCs) are overwhelmed. A single tier-1 security ana
 
 ---
 
+## 🚀 Run the Demo (Mentor Evaluation)
+
+```bash
+# 1. Backend (FastAPI) — from repo root
+pip install -r backend/requirements.txt
+python backend/run.py                 # http://localhost:8000  (Swagger: /docs)
+
+# 2. Frontend (React + Vite) — second terminal
+cd frontend && npm install && npm run dev   # http://localhost:3000 (proxies /api → :8000)
+
+# Tests
+python -m pytest                      # backend
+cd frontend && npm run build          # frontend build check
+```
+
+**Demo safety nets (no setup required):**
+- If PostgreSQL is unreachable, the API automatically falls back to a local SQLite file (`sworders_demo.db`) — `/api/health` reports `"mode": "demo-fallback"`. Disable with `DEMO_DB_FALLBACK=false`.
+- An empty database is seeded with **clearly simulated** alerts, incidents and investigations (`backend/app/services/demo_seed.py`). Disable with `SEED_DEMO_DATA=false`.
+- If the backend is down, the UI keeps working on its bundled dataset and labels every view **DEMO DATA**.
+
+**Demo flow:** Dashboard → Alert Queue → *Investigate* on a critical alert → Investigation Workspace (overview, attack timeline, evidence, MITRE ATT&CK, AI-assisted analysis, recommended response) → move the incident NEW → INVESTIGATING → CONTAINED → RESOLVED (persisted via `PATCH /api/incidents/{id}`) → System Status.
+
+**AI honesty note:** the investigation panel is an *explainable rule-based* analysis over correlated evidence (`frontend/src/data/socKnowledge.js`). No external LLM is called; Azure OpenAI plugs into the same output contract when configured.
+
+---
+
 ## 🏗️ System Architecture
 
 ```

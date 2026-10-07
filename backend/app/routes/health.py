@@ -3,7 +3,8 @@ from fastapi import APIRouter, Depends, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from backend.app.core.database import get_db
+from backend.app.core.config import settings
+from backend.app.core.database import DB_DIALECT, DB_MODE, get_db
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,12 @@ class HealthResponse(BaseModel):
         ...,
         description="Database connectivity status ('connected' or 'disconnected')",
         examples=["connected"],
+    )
+    database_engine: str = Field(DB_DIALECT, description="Active database dialect (e.g. 'postgresql', 'sqlite')")
+    mode: str = Field(DB_MODE, description="'primary' or 'demo-fallback' when PostgreSQL was unreachable")
+    ai_engine: str = Field(
+        "azure-openai" if settings.AZURE_OPENAI_ENDPOINT else "rule-based",
+        description="Investigation summary engine in use",
     )
 
 

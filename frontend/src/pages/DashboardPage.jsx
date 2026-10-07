@@ -14,9 +14,19 @@ import {
 import ThreatHero from '../components/ThreatHero';
 import AlertFunnel from '../components/AlertFunnel';
 import IncidentTable from '../components/IncidentTable';
+import { AlertVolumeChart, SeverityDistribution, RecentCriticalAlerts, ActiveIncidents, SystemHealthMini } from '../components/DashboardCharts';
+import { MITRE_TECHNIQUES, EVENT_TECHNIQUE } from '../data/socKnowledge';
 
-export default function DashboardPage({ kpis, incidents, onSelectIncident }) {
-  const criticalIncident = incidents?.find(i => i.severity === 'critical') || incidents?.[0];
+export default function DashboardPage({ kpis, incidents = [], alerts = [], backendStatus, onNavigate, onSelectIncident }) {
+  const active = incidents.filter(i => i.status !== 'resolved');
+  const criticalIncident = active.find(i => i.severity === 'critical') || incidents[0];
+  const activeThreats = active.filter(i => ['critical', 'high'].includes(i.severity)).length;
+  const criticalAlerts = alerts.filter(a => a.severity >= 9).length;
+  const openIncidents = active.length;
+  const investigating = incidents.filter(i => i.status === 'investigating').length;
+  const techniqueCount = Object.keys(MITRE_TECHNIQUES).length;
+  // Share of alerts whose detection maps to a MITRE ATT&CK technique
+  const coverage = alerts.length ? Math.round((alerts.filter(a => EVENT_TECHNIQUE[a.event_type]).length / alerts.length) * 100) : 0;
 
   return (
     <div className="content-viewport">
@@ -66,75 +76,34 @@ export default function DashboardPage({ kpis, incidents, onSelectIncident }) {
         </div>
       </div>
 
-      {/* 2. KPI Strip */}
-      <div className="kpi-grid">
-        {/* KPI 1: Raw Ingested Alerts */}
-        <div className="kpi-card">
-          <div className="kpi-header">
-            <span className="kpi-title">Raw Alerts (24h)</span>
-            <div className="kpi-icon-wrap">
-              <Radio size={15} />
+      {/* 2. KPI Strip — the five numbers a SOC lead asks for first */}
+      <div className="dash-kpis">
+        {[
+          { title: 'Active Threats', value: activeThreats, sub: `${incidents.length} correlated from ${alerts.length.toLocaleString()} alerts`, trend: '▲ 2 vs yesterday', tc: '#f87171', icon: Flame, color: '#fb923c' },
+          { title: 'Critical Alerts', value: criticalAlerts, sub: 'Severity 9–10 in last 24h', trend: '▲ 18%', tc: '#f87171', icon: ShieldAlert, color: 'var(--sev-critical)', accent: true },
+          { title: 'Open Incidents', value: openIncidents, sub: `${investigating} under investigation`, trend: 'Queue prioritised by risk', tc: 'var(--text-muted)', icon: Layers, color: '#38bdf8' },
+          { title: 'Mean Time to Respond', value: kpis?.meanTimeToContain || '11.8m', sub: 'Industry median ≈ 4h+', trend: '▼ 87% analyst time', tc: '#34d399', icon: Clock, color: '#34d399' },
+          { title: 'Detection Coverage', value: `${coverage}%`, sub: `${techniqueCount} ATT&CK techniques mapped`, trend: 'of alerts ATT&CK-mapped', tc: 'var(--text-muted)', icon: CheckCircle, color: '#a78bfa' },
+        ].map(k => (
+          <div key={k.title} className="kpi-card" style={k.accent ? { borderLeft: '3px solid var(--sev-critical)' } : undefined}>
+            <div className="kpi-header">
+              <span className="kpi-title">{k.title}</span>
+              <div className="kpi-icon-wrap" style={{ color: k.color }}><k.icon size={15} /></div>
+            </div>
+            <div className="kpi-value-row">
+              <span className="kpi-value" style={k.accent ? { color: '#f87171' } : undefined}>{k.value}</span>
+            </div>
+            <div className="kpi-subtext" style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              <span>{k.sub}</span>
+              <span style={{ color: k.tc, fontWeight: 600 }}>{k.trend}</span>
             </div>
           </div>
-          <div className="kpi-value-row">
-            <span className="kpi-value">{(kpis?.rawAlertsCount || 3142).toLocaleString()}</span>
-            <span style={{ fontSize: '12px', color: '#38bdf8' }}>+12% vs avg</span>
-          </div>
-          <div className="kpi-subtext">
-            <span>Ingested from SIEM, EDR & Cloud Auth</span>
-          </div>
-        </div>
+        ))}
+      </div>
 
-        {/* KPI 2: Correlated Incidents */}
-        <div className="kpi-card">
-          <div className="kpi-header">
-            <span className="kpi-title">Correlated Incidents</span>
-            <div className="kpi-icon-wrap" style={{ color: '#fb923c' }}>
-              <Flame size={15} />
-            </div>
-          </div>
-          <div className="kpi-value-row">
-            <span className="kpi-value">{incidents?.length || kpis?.activeIncidentsCount || 14}</span>
-            <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>From 3,000+ alerts</span>
-          </div>
-          <div className="kpi-subtext">
-            <span style={{ color: '#34d399', fontWeight: '600' }}>99.5% noise reduction</span>
-          </div>
-        </div>
-
-        {/* KPI 3: Critical Attention Required */}
-        <div className="kpi-card" style={{ borderLeft: '3px solid var(--sev-critical)' }}>
-          <div className="kpi-header">
-            <span className="kpi-title" style={{ color: '#f87171' }}>Critical Action Items</span>
-            <div className="kpi-icon-wrap" style={{ color: 'var(--sev-critical)', backgroundColor: 'var(--sev-critical-bg)' }}>
-              <ShieldAlert size={15} />
-            </div>
-          </div>
-          <div className="kpi-value-row">
-            <span className="kpi-value" style={{ color: '#f87171' }}>{kpis?.criticalIncidentsCount || 2}</span>
-            <span style={{ fontSize: '12px', color: '#fca5a5' }}>Requires immediate containment</span>
-          </div>
-          <div className="kpi-subtext">
-            <span style={{ color: 'var(--sev-critical)', fontWeight: '600' }}>Active C2 & Lateral movement</span>
-          </div>
-        </div>
-
-        {/* KPI 4: Average Risk Index */}
-        <div className="kpi-card">
-          <div className="kpi-header">
-            <span className="kpi-title">Average Risk Score</span>
-            <div className="kpi-icon-wrap" style={{ color: '#facc15' }}>
-              <Activity size={15} />
-            </div>
-          </div>
-          <div className="kpi-value-row">
-            <span className="kpi-value">{kpis?.averageRiskScore || 78.4}</span>
-            <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>/ 100</span>
-          </div>
-          <div className="kpi-subtext">
-            <span>Explainable weighted composite metric</span>
-          </div>
-        </div>
+      <div className="dash-row">
+        <AlertVolumeChart alerts={alerts} />
+        <SeverityDistribution alerts={alerts} />
       </div>
 
       {/* 3. Main Threat Hero: Visual Priority for Top Incident */}
@@ -148,6 +117,12 @@ export default function DashboardPage({ kpis, incidents, onSelectIncident }) {
         correlatedCount={incidents?.length || 14} 
         criticalCount={kpis?.criticalIncidentsCount || 2} 
       />
+
+      <div className="dash-row-3">
+        <RecentCriticalAlerts alerts={alerts} incidents={incidents} onInvestigate={onSelectIncident} />
+        <ActiveIncidents incidents={incidents} onInvestigate={onSelectIncident} />
+        <SystemHealthMini backendStatus={backendStatus} onNavigate={onNavigate} />
+      </div>
 
       {/* 5. Incident Table */}
       <IncidentTable 

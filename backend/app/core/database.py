@@ -7,12 +7,40 @@ from backend.app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Configure engine arguments based on database dialect
-engine_kwargs = {"pool_pre_ping": True}
-if settings.DATABASE_URL.startswith("sqlite"):
-    engine_kwargs["connect_args"] = {"check_same_thread": False}
 
-engine = create_engine(settings.DATABASE_URL, **engine_kwargs)
+def _make_engine(url: str):
+    """Configure engine arguments based on database dialect."""
+    engine_kwargs = {"pool_pre_ping": True}
+    if url.startswith("sqlite"):
+        engine_kwargs["connect_args"] = {"check_same_thread": False}
+    elif url.startswith("postgresql"):
+        engine_kwargs["connect_args"] = {"connect_timeout": 3}
+    return create_engine(url, **engine_kwargs)
+
+
+def _resolve_engine():
+    """
+    Connect to the configured database. If it is unreachable and the demo
+    fallback is enabled, use a local SQLite file so the demo never blocks.
+    Returns (engine, mode) where mode is 'primary' or 'demo-fallback'.
+    """
+    primary = _make_engine(settings.DATABASE_URL)
+    if settings.DATABASE_URL.startswith("sqlite") or not settings.DEMO_DB_FALLBACK:
+        return primary, "primary"
+    try:
+        with primary.connect() as connection:
+            connection.execute(text("SELECT 1"))
+        return primary, "primary"
+    except Exception as exc:  # noqa: BLE001 - any connect failure triggers fallback
+        logger.warning(
+            "Primary database unreachable (%s). Falling back to demo SQLite database.",
+            exc.__class__.__name__,
+        )
+        return _make_engine(settings.DEMO_FALLBACK_URL), "demo-fallback"
+
+
+engine, DB_MODE = _resolve_engine()
+DB_DIALECT = engine.dialect.name
 
 SessionLocal = sessionmaker(
     autocommit=False,

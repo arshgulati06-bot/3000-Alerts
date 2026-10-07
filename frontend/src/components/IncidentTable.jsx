@@ -44,6 +44,8 @@ export default function IncidentTable({ incidents, onSelectIncident, title = "Ac
   const getStatusBadgeClass = (status) => {
     switch (status?.toLowerCase()) {
       case 'open': return 'status-badge status-badge-open';
+      case 'new': return 'status-badge status-badge-new';
+      case 'contained': return 'status-badge status-badge-contained';
       case 'investigating': return 'status-badge status-badge-investigating';
       case 'resolved': return 'status-badge status-badge-resolved';
       default: return 'status-badge';
@@ -170,7 +172,7 @@ export default function IncidentTable({ incidents, onSelectIncident, title = "Ac
                 {/* Status */}
                 <td>
                   <span className={getStatusBadgeClass(inc.status)}>
-                    {inc.status || 'open'}
+                    {inc.status || 'new'}
                   </span>
                 </td>
 

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from backend.app.core.database import get_db
 from backend.app.models.incident import Incident
-from backend.app.schemas.incident import IncidentDetailResponse, IncidentListResponse
+from backend.app.schemas.incident import IncidentDetailResponse, IncidentListResponse, IncidentStatusUpdate
 
 router = APIRouter(prefix="/incidents", tags=["Incidents"])
 
@@ -77,4 +77,33 @@ def get_incident(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Incident with ID {incident_id} not found.",
         )
+    return incident
+
+
+@router.patch(
+    "/{incident_id}",
+    response_model=IncidentDetailResponse,
+    summary="Update Incident Status",
+    description="Transitions an incident through the analyst workflow (new → investigating → contained → resolved).",
+    responses={
+        200: {"description": "Incident updated."},
+        404: {"description": "Incident not found."},
+        422: {"description": "Invalid status value."},
+    },
+)
+def update_incident_status(
+    incident_id: int,
+    update: IncidentStatusUpdate,
+    db: Session = Depends(get_db),
+) -> Incident:
+    """Update the workflow status of an incident."""
+    incident = db.query(Incident).filter(Incident.id == incident_id).first()
+    if not incident:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Incident with ID {incident_id} not found.",
+        )
+    incident.status = update.status
+    db.commit()
+    db.refresh(incident)
     return incident

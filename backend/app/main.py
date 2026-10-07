@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from backend.app.core.config import settings
-from backend.app.core.database import init_db
+from backend.app.core.database import SessionLocal, get_db, init_db
 from backend.app.routes.alerts import router as alerts_router
 from backend.app.routes.health import router as health_router
 from backend.app.routes.incidents import router as incidents_router
@@ -28,6 +28,15 @@ async def lifespan(app: FastAPI):
     """
     logger.info("Initializing %s v%s...", settings.APP_NAME, settings.APP_VERSION)
     init_db()
+    # Seed simulated demo data into an empty database (skipped when tests override the DB).
+    if settings.SEED_DEMO_DATA and get_db not in app.dependency_overrides:
+        try:
+            from backend.app.services.demo_seed import seed_demo_data
+
+            with SessionLocal() as db:
+                seed_demo_data(db)
+        except Exception as exc:  # noqa: BLE001 - demo seeding must never block startup
+            logger.warning("Demo data seeding skipped: %s", exc)
     yield
     logger.info("Shutting down %s...", settings.APP_NAME)
 
@@ -120,7 +129,7 @@ def root():
         "project": "Sworders SOC",
         "description": "Microsoft Innovate 2026 - 3,000 Alerts, One Analyst",
         "version": settings.APP_VERSION,
-        "phase": "Phase 1: Backend Foundation",
+        "phase": "Demo build: ingestion, incidents, investigation workflow",
         "docs_url": "/docs",
         "health_check": f"{settings.API_PREFIX}/health",
     }

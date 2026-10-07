@@ -7,9 +7,8 @@ import IncidentsPage from './pages/IncidentsPage';
 import MitrePage from './pages/MitrePage';
 import InvestigationPage from './pages/InvestigationPage';
 import SystemStatusPage from './pages/SystemStatusPage';
-import IncidentDetail from './components/IncidentDetail';
 import IngestAlertModal from './components/IngestAlertModal';
-import { checkHealth, fetchAlerts, fetchIncidents, fetchKPIs } from './services/api';
+import { checkHealth, fetchAlerts, fetchIncidents, fetchKPIs, updateIncidentStatus } from './services/api';
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState('dashboard');
@@ -21,6 +20,14 @@ export default function App() {
   const [isIngestModalOpen, setIsIngestModalOpen] = useState(false);
   const [globalSearch, setGlobalSearch] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [dataSource, setDataSource] = useState({ alerts: false, incidents: false });
+
+  // Selecting an incident anywhere opens the full investigation workspace
+  const openInvestigation = (incident) => {
+    setSelectedIncident(incident);
+    setCurrentTab('investigation');
+    window.scrollTo?.(0, 0);
+  };
 
   // Initialize data
   useEffect(() => {
@@ -31,12 +38,13 @@ export default function App() {
           checkHealth(),
           fetchKPIs(),
           fetchIncidents(),
-          fetchAlerts(),
+          fetchAlerts({ page_size: 500 }),
         ]);
         setBackendStatus(healthRes);
         setKpis(kpisRes);
         setIncidents(incRes.items || []);
         setAlerts(altRes.items || []);
+        setDataSource({ alerts: !!altRes.isLive, incidents: !!incRes.isLive });
       } catch (err) {
         console.error('Error loading initial telemetry:', err);
       } finally {
@@ -50,7 +58,6 @@ export default function App() {
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
-        setSelectedIncident(null);
         setIsIngestModalOpen(false);
       }
     };
@@ -59,6 +66,8 @@ export default function App() {
   }, []);
 
   const handleUpdateIncidentStatus = (id, newStatus) => {
+    // Optimistic UI update; persisted via PATCH /api/incidents/{id} when backend is live
+    if (dataSource.incidents) updateIncidentStatus(id, newStatus);
     setIncidents(prev => prev.map(inc => inc.id === id ? { ...inc, status: newStatus } : inc));
     if (selectedIncident && selectedIncident.id === id) {
       setSelectedIncident(prev => ({ ...prev, status: newStatus }));
@@ -76,13 +85,19 @@ export default function App() {
           <DashboardPage
             kpis={kpis}
             incidents={incidents}
-            onSelectIncident={setSelectedIncident}
+            alerts={alerts}
+            backendStatus={backendStatus}
+            onNavigate={setCurrentTab}
+            onSelectIncident={openInvestigation}
           />
         );
       case 'alerts':
         return (
           <AlertsPage
             alerts={alerts}
+            incidents={incidents}
+            isLive={dataSource.alerts}
+            onInvestigate={openInvestigation}
             onOpenIngestModal={() => setIsIngestModalOpen(true)}
           />
         );
@@ -90,31 +105,39 @@ export default function App() {
         return (
           <IncidentsPage
             incidents={incidents}
-            onSelectIncident={setSelectedIncident}
+            onSelectIncident={openInvestigation}
             onUpdateStatus={handleUpdateIncidentStatus}
           />
         );
       case 'investigation':
         return (
           <InvestigationPage
+            incidents={incidents}
+            alerts={alerts}
+            selectedIncident={selectedIncident}
             onSelectIncident={setSelectedIncident}
+            onUpdateStatus={handleUpdateIncidentStatus}
+            isLive={dataSource.incidents}
           />
         );
       case 'mitre':
         return (
           <MitrePage
             incidents={incidents}
-            onSelectIncident={setSelectedIncident}
+            onSelectIncident={openInvestigation}
           />
         );
       case 'status':
-        return <SystemStatusPage />;
+        return <SystemStatusPage dataSource={dataSource} alertCount={alerts.length} incidentCount={incidents.length} />;
       default:
         return (
           <DashboardPage
             kpis={kpis}
             incidents={incidents}
-            onSelectIncident={setSelectedIncident}
+            alerts={alerts}
+            backendStatus={backendStatus}
+            onNavigate={setCurrentTab}
+            onSelectIncident={openInvestigation}
           />
         );
     }
@@ -145,18 +168,15 @@ export default function App() {
         />
 
         <main style={{ flex: 1 }}>
-          {renderContent()}
+          {isLoading ? (
+            <div className="content-viewport" style={{ alignItems: 'center', justifyContent: 'center', minHeight: '60vh', color: 'var(--text-muted)' }}>
+              <div className="loading-spinner" />
+              <span style={{ fontSize: '13px' }}>Connecting to SOC telemetry pipeline…</span>
+            </div>
+          ) : renderContent()}
         </main>
       </div>
 
-      {/* Detailed Investigation Modal */}
-      {selectedIncident && (
-        <IncidentDetail
-          incident={selectedIncident}
-          onClose={() => setSelectedIncident(null)}
-          onUpdateStatus={handleUpdateIncidentStatus}
-        />
-      )}
 
       {/* Ingest Alert Modal (Real Backend POST /api/alerts) */}
       {isIngestModalOpen && (
