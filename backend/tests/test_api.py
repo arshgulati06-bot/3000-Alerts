@@ -279,12 +279,21 @@ def test_update_incident_status(client):
     incident_id = db.query(Incident).first().id
     db.close()
 
-    response = client.patch(f"/api/incidents/{incident_id}", json={"status": "contained"})
+    # Workflow changes require an authenticated analyst
+    assert client.patch(f"/api/incidents/{incident_id}", json={"status": "contained"}).status_code == 401
+
+    token = client.post(
+        "/api/auth/register",
+        json={"email": "patch@test.local", "password": "longpassword", "full_name": "Patch Tester"},
+    ).json()["access_token"]
+    auth = {"Authorization": f"Bearer {token}"}
+
+    response = client.patch(f"/api/incidents/{incident_id}", json={"status": "contained"}, headers=auth)
     assert response.status_code == 200
     assert response.json()["status"] == "contained"
 
-    assert client.patch(f"/api/incidents/{incident_id}", json={"status": "bogus"}).status_code == 422
-    assert client.patch("/api/incidents/9999", json={"status": "resolved"}).status_code == 404
+    assert client.patch(f"/api/incidents/{incident_id}", json={"status": "bogus"}, headers=auth).status_code == 422
+    assert client.patch("/api/incidents/9999", json={"status": "resolved"}, headers=auth).status_code == 404
 
 
 def test_demo_seed_populates_empty_database():
@@ -296,4 +305,36 @@ def test_demo_seed_populates_empty_database():
     assert db.query(Incident).count() == 6
     assert db.query(Alert).count() > 100
     assert seed_demo_data(db) is False
+    db.close()
+
+
+def test_auth_register_login_me_flow(client):
+    """Register → duplicate rejected → bad password rejected → login → /me."""
+    payload = {"email": "Analyst@Test.local", "password": "correct-horse", "full_name": "Test Analyst"}
+    created = client.post("/api/auth/register", json=payload)
+    assert created.status_code == 201
+    assert created.json()["user"]["email"] == "analyst@test.local"
+    assert "password" not in created.text and "password_hash" not in created.text
+
+    assert client.post("/api/auth/register", json=payload).status_code == 409
+    assert client.post("/api/auth/register", json={**payload, "email": "x@y.z", "password": "short"}).status_code == 422
+    assert client.post("/api/auth/login", json={"email": "analyst@test.local", "password": "wrong"}).status_code == 401
+    assert client.post("/api/auth/login", json={"email": "not-an-email", "password": "x"}).status_code == 422
+
+    login = client.post("/api/auth/login", json={"email": "analyst@test.local", "password": "correct-horse"})
+    assert login.status_code == 200
+    token = login.json()["access_token"]
+
+    me = client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert me.status_code == 200 and me.json()["full_name"] == "Test Analyst"
+    assert client.get("/api/auth/me").status_code == 401
+    assert client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}x"}).status_code == 401
+
+
+def test_demo_user_created_once():
+    from backend.app.services.demo_seed import ensure_demo_user
+
+    db = TestingSessionLocal()
+    assert ensure_demo_user(db) is True
+    assert ensure_demo_user(db) is False
     db.close()

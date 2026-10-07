@@ -68,8 +68,15 @@ const SAMPLE_TEMPLATES = [
   }
 ];
 
-export default function IngestAlertModal({ onClose, onAlertIngested }) {
-  const [formData, setFormData] = useState(SAMPLE_TEMPLATES[0].data);
+// Fresh unique ID + current timestamp so repeated ingests never collide (HTTP 409)
+const freshAlert = (tpl) => ({
+  ...tpl.data,
+  external_alert_id: `ALT-${Math.floor(10000 + Math.random() * 90000)}`,
+  timestamp: new Date().toISOString(),
+});
+
+export default function IngestAlertModal({ onClose, onAlertIngested, backendOnline = true }) {
+  const [formData, setFormData] = useState(() => freshAlert(SAMPLE_TEMPLATES[0]));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusMsg, setStatusMsg] = useState(null);
 
@@ -84,11 +91,7 @@ export default function IngestAlertModal({ onClose, onAlertIngested }) {
   }, [onClose]);
 
   const handleSelectTemplate = (tpl) => {
-    setFormData({
-      ...tpl.data,
-      external_alert_id: `ALT-${Math.floor(10000 + Math.random() * 90000)}`,
-      timestamp: new Date().toISOString()
-    });
+    setFormData(freshAlert(tpl));
   };
 
   const handleSubmit = async (e) => {
@@ -105,7 +108,7 @@ export default function IngestAlertModal({ onClose, onAlertIngested }) {
       if (onAlertIngested) onAlertIngested(res);
       setTimeout(() => {
         onClose();
-      }, 1500);
+      }, 1200);
     } catch (err) {
       setStatusMsg({
         type: 'error',
@@ -252,10 +255,13 @@ export default function IngestAlertModal({ onClose, onAlertIngested }) {
           </div>
 
           <div className="modal-footer">
+            {!backendOnline && (
+              <span style={{ marginRight: 'auto', fontSize: '11px', color: '#facc15' }}>SOC API offline — ingestion unavailable in demo mode.</span>
+            )}
             <button type="button" className="btn btn-secondary btn-sm" onClick={onClose}>
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary btn-sm" disabled={isSubmitting}>
+            <button type="submit" className="btn btn-primary btn-sm" disabled={isSubmitting || !backendOnline}>
               <Send size={13} />
               <span>{isSubmitting ? 'Ingesting...' : 'Ingest to FastAPI'}</span>
             </button>

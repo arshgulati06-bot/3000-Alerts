@@ -9,6 +9,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from backend.app.core.config import settings
 from backend.app.core.database import SessionLocal, get_db, init_db
 from backend.app.routes.alerts import router as alerts_router
+from backend.app.routes.auth import router as auth_router
 from backend.app.routes.health import router as health_router
 from backend.app.routes.incidents import router as incidents_router
 
@@ -31,10 +32,11 @@ async def lifespan(app: FastAPI):
     # Seed simulated demo data into an empty database (skipped when tests override the DB).
     if settings.SEED_DEMO_DATA and get_db not in app.dependency_overrides:
         try:
-            from backend.app.services.demo_seed import seed_demo_data
+            from backend.app.services.demo_seed import ensure_demo_user, seed_demo_data
 
             with SessionLocal() as db:
                 seed_demo_data(db)
+                ensure_demo_user(db)
         except Exception as exc:  # noqa: BLE001 - demo seeding must never block startup
             logger.warning("Demo data seeding skipped: %s", exc)
     yield
@@ -139,5 +141,6 @@ def root():
 # Include Routers under API Prefix (/api)
 # ------------------------------------------------------------------------------
 app.include_router(health_router, prefix=settings.API_PREFIX)
+app.include_router(auth_router, prefix=settings.API_PREFIX)
 app.include_router(alerts_router, prefix=settings.API_PREFIX)
 app.include_router(incidents_router, prefix=settings.API_PREFIX)

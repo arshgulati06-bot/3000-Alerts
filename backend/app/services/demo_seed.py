@@ -17,6 +17,9 @@ from sqlalchemy.orm import Session
 from backend.app.models.alert import Alert
 from backend.app.models.incident import Incident
 from backend.app.models.investigation import Investigation
+from backend.app.models.user import User
+from backend.app.core.config import settings
+from backend.app.core.security import hash_password
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +86,14 @@ def seed_demo_data(db: Session) -> bool:
         payload["raw_data"] = {**(payload.get("raw_data") or {}), "simulated": True}
         alert_rows.append(payload)
 
-    anchor = max(a["timestamp"] for a in alert_rows) if alert_rows else datetime.now(timezone.utc)
+    # Shift the scenario by whole days so it always falls within the last 24h
+    # (times of day stay identical to the scripted attack timeline).
+    now = datetime.now(timezone.utc)
+    latest = max(a["timestamp"] for a in alert_rows) if alert_rows else now
+    shift = timedelta(days=max(0, (now - latest) // timedelta(days=1)))
+    for payload in alert_rows:
+        payload["timestamp"] += shift
+    anchor = latest + shift
     alert_rows.extend(_noise_alerts(anchor))
 
     for payload in alert_rows:
@@ -93,8 +103,8 @@ def seed_demo_data(db: Session) -> bool:
 
     for raw in data["incidents"]:
         investigation = raw.pop("investigation", None)
-        raw["created_at"] = _parse_ts(raw["created_at"])
-        raw["updated_at"] = _parse_ts(raw["updated_at"])
+        raw["created_at"] = _parse_ts(raw["created_at"]) + shift
+        raw["updated_at"] = _parse_ts(raw["updated_at"]) + shift
         incident = Incident(**raw)
         if investigation and investigation.get("summary"):
             incident.investigations.append(Investigation(**investigation))
@@ -102,4 +112,21 @@ def seed_demo_data(db: Session) -> bool:
 
     db.commit()
     logger.info("Seeded demo dataset: %d alerts, %d incidents (simulated).", len(alert_rows), len(data["incidents"]))
+    return True
+
+
+def ensure_demo_user(db: Session) -> bool:
+    """Create the documented demo analyst account if no users exist."""
+    if db.query(User).count() > 0:
+        return False
+    db.add(
+        User(
+            email=settings.DEMO_USER_EMAIL,
+            full_name="Demo Analyst",
+            role="Tier-2 SOC Analyst",
+            password_hash=hash_password(settings.DEMO_USER_PASSWORD),
+        )
+    )
+    db.commit()
+    logger.info("Created demo analyst account %s.", settings.DEMO_USER_EMAIL)
     return True

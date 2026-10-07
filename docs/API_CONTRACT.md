@@ -321,3 +321,25 @@ Retrieves single incident details including any associated investigation records
   "detail": "Incident with ID 999 not found."
 }
 ```
+
+
+---
+
+### 2.6 Update Incident Status (demo build addition)
+- **URL:** `/api/incidents/{id}` · **Method:** `PATCH` · **Auth:** `Authorization: Bearer <token>`
+- **Body:** `{"status": "new" | "open" | "investigating" | "contained" | "resolved" | "closed"}`
+- **Responses:** `200` updated incident detail · `401` missing/invalid token · `404` unknown incident · `422` invalid status
+
+### 2.7 Authentication (demo build addition)
+| Method | URL | Body | Success | Errors |
+| :--- | :--- | :--- | :--- | :--- |
+| `POST` | `/api/auth/login` | `{"email", "password"}` | `200 {access_token, token_type, user}` | `401`, `422` |
+| `POST` | `/api/auth/register` | `{"full_name", "email", "password" (≥ 8 chars)}` | `201 {access_token, token_type, user}` | `409` duplicate email, `422` |
+| `GET` | `/api/auth/me` | — | `200 {id, email, full_name, role, created_at}` | `401` |
+
+Passwords are stored as salted PBKDF2-SHA256 hashes and never returned. Tokens are HMAC-SHA256 signed and expire after
+`ACCESS_TOKEN_TTL_MINUTES` (default 12 h).
+
+### 2.8 Health response additions
+`GET /api/health` also returns `database_engine` (`postgresql` / `sqlite`), `mode` (`primary` / `demo-fallback`) and
+`ai_engine` (`rule-based`, or `azure-openai` when configured).

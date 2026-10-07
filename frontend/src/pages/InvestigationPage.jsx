@@ -1,7 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Microscope, GitBranch, Binary, Sparkles, ShieldCheck, Server, Target, Crosshair,
-  ListChecks, CheckCircle2, Circle, AlertTriangle, Info, User, Clock, Layers, Gauge,
+  ListChecks, CheckCircle2, Circle, AlertTriangle, Info, Layers, Gauge,
 } from 'lucide-react';
 import AttackTimeline from '../components/AttackTimeline';
 import EvidenceGrid from '../components/EvidenceGrid';
@@ -44,6 +44,7 @@ export default function InvestigationPage({ incidents = [], alerts = [], selecte
     ? (incidents.find(i => i.id === selectedIncident.id) || selectedIncident)
     : incidents[0];
   const [doneActions, setDoneActions] = useState({});
+  useEffect(() => { setDoneActions({}); }, [incident?.id]);
 
   const analysis = useMemo(() => analyzeIncident(incident, alerts), [incident, alerts]);
   const related = useMemo(() => relatedAlerts(incident, alerts), [incident, alerts]);
@@ -106,7 +107,7 @@ export default function InvestigationPage({ incidents = [], alerts = [], selecte
           value={incident.id}
           onChange={(e) => {
             const found = incidents.find(i => String(i.id) === e.target.value);
-            if (found) { onSelectIncident(found); setDoneActions({}); }
+            if (found) onSelectIncident(found);
           }}
         >
           {incidents.map(inc => (
@@ -129,7 +130,7 @@ export default function InvestigationPage({ incidents = [], alerts = [], selecte
             </button>
           );
         })}
-        <span className="ws-stepper-hint">Click a stage to transition the incident{isLive ? ' (persisted via PATCH /api/incidents)' : ''}</span>
+        <span className="ws-stepper-hint">Click a stage to transition the incident{isLive ? ' · saved to the database' : ' · offline demo, not saved'}</span>
       </div>
 
       <div className="ws-grid">
@@ -260,11 +261,18 @@ export default function InvestigationPage({ incidents = [], alerts = [], selecte
                 );
               })}
             </div>
+            <div className="ws-disclaimer" style={{ marginTop: '10px' }}>
+              <Info size={12} />
+              <span>Simulated playbook: ticking a step records it for this session only — no endpoint, account or firewall is changed by this demo.</span>
+            </div>
             <div style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }}>
-              <button className="btn btn-secondary btn-sm" onClick={() => onUpdateStatus(incident.id, 'contained')}>
+              <button className="btn btn-secondary btn-sm" disabled={status === 'investigating'} onClick={() => onUpdateStatus(incident.id, 'investigating')}>
+                <Microscope size={13} /> <span>Mark Investigating</span>
+              </button>
+              <button className="btn btn-secondary btn-sm" disabled={status === 'contained'} onClick={() => onUpdateStatus(incident.id, 'contained')}>
                 <AlertTriangle size={13} /> <span>Mark Contained</span>
               </button>
-              <button className="btn btn-primary btn-sm" onClick={() => onUpdateStatus(incident.id, 'resolved')}>
+              <button className="btn btn-primary btn-sm" disabled={status === 'resolved'} onClick={() => onUpdateStatus(incident.id, 'resolved')}>
                 <CheckCircle2 size={13} /> <span>Resolve Incident</span>
               </button>
             </div>

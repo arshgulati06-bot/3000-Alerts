@@ -1326,3 +1326,63 @@ code, pre, .font-mono {
   .ws-grid, .dash-row, .dash-row-3 { grid-template-columns: 1fr; }
   .dash-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* ==========================================================================
+   Authentication
+   ========================================================================== */
+.auth-shell { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px 16px; background: radial-gradient(1200px 600px at 50% -10%, rgba(56, 189, 248, 0.08), transparent 60%), var(--bg-app); }
+.auth-card { width: 100%; max-width: 400px; background: var(--bg-surface-1); border: 1px solid var(--border-medium); border-radius: var(--radius-lg); padding: 28px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45); animation: wsFade 0.3s ease both; }
+.auth-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 22px; }
+.auth-logo { width: 42px; height: 42px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #38bdf8; background: rgba(56, 189, 248, 0.12); border: 1px solid var(--border-accent); }
+.auth-title { font-family: var(--font-heading); font-size: 18px; font-weight: 800; color: #fff; letter-spacing: 0.04em; }
+.auth-sub { font-size: 12px; color: var(--primary); }
+.auth-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; background: var(--bg-surface-2); border-radius: var(--radius-md); margin-bottom: 18px; }
+.auth-tabs button { background: transparent; border: 1px solid transparent; color: var(--text-secondary); padding: 7px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; cursor: pointer; }
+.auth-tabs button.active { background: var(--bg-surface-3); color: #fff; border-color: var(--border-medium); }
+.auth-form { display: flex; flex-direction: column; gap: 12px; }
+.auth-form label { display: flex; flex-direction: column; gap: 5px; }
+.auth-form label span { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+.auth-form input { background: var(--bg-surface-2); border: 1px solid var(--border-medium); border-radius: var(--radius-md); padding: 10px 12px; color: #fff; font-size: 13px; outline: none; font-family: inherit; }
+.auth-form input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.12); }
+.auth-submit { justify-content: center; padding: 10px; margin-top: 4px; }
+.auth-error { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; color: #fca5a5; background: var(--sev-critical-bg); border: 1px solid var(--sev-critical-border); border-radius: var(--radius-sm); padding: 8px 10px; }
+.auth-hint { display: flex; gap: 6px; align-items: flex-start; margin-top: 16px; font-size: 11px; color: var(--text-muted); line-height: 1.5; }
+.auth-hint code { font-family: var(--font-mono); color: var(--text-secondary); background: var(--bg-surface-2); padding: 1px 4px; border-radius: 3px; }
+.auth-offline { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border-subtle); display: flex; flex-direction: column; gap: 8px; font-size: 12px; color: #facc15; }
+.auth-offline > div { display: flex; gap: 6px; align-items: center; }
+.spin { animation: wsSpin 0.8s linear infinite; }
+.sidebar-logout { margin-left: auto; background: transparent; border: 1px solid var(--border-subtle); color: var(--text-muted); border-radius: var(--radius-sm); padding: 6px; cursor: pointer; display: flex; }
+.sidebar-logout:hover { color: #f87171; border-color: var(--sev-critical-border); }
+
+/* Toasts + offline banner */
+.toast-stack { position: fixed; right: 20px; bottom: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 2000; max-width: min(420px, calc(100vw - 32px)); }
+.toast { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; border-radius: var(--radius-md); font-size: 12px; color: #fff; background: var(--bg-surface-2); border: 1px solid var(--border-medium); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4); animation: wsFade 0.2s ease both; }
+.toast span { flex: 1; line-height: 1.5; }
+.toast button { background: transparent; border: none; color: var(--text-muted); cursor: pointer; padding: 0; }
+.toast-success { border-color: var(--sev-healthy-border); } .toast-success svg:first-child { color: #34d399; }
+.toast-error { border-color: var(--sev-critical-border); } .toast-error svg:first-child { color: #f87171; }
+.toast-info { border-color: var(--sev-medium-border); } .toast-info svg:first-child { color: #facc15; }
+.offline-banner { display: flex; align-items: center; gap: 10px; margin: 12px 24px 0; padding: 8px 14px; font-size: 12px; color: #fde68a; background: var(--sev-medium-bg); border: 1px solid var(--sev-medium-border); border-radius: var(--radius-md); }
+.offline-banner span { flex: 1; }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* MITRE coverage grid */
+.mitre-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; align-items: start; }
+.mitre-col { background: var(--bg-surface-1); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); overflow: hidden; }
+.mitre-col-head { padding: 10px 12px; border-bottom: 1px solid var(--border-subtle); background: rgba(0, 0, 0, 0.2); }
+.mitre-col-title { font-size: 13px; font-weight: 700; color: #fff; }
+.mitre-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; width: 100%; padding: 8px 10px; border: 1px solid; border-radius: var(--radius-sm); cursor: pointer; transition: transform 0.12s ease, border-color 0.12s ease; }
+.mitre-cell:hover { transform: translateY(-1px); border-color: var(--border-accent) !important; }
+
+/* Tables never push the page sideways */
+.table-container, .data-table-wrap { overflow-x: auto; }
+
+/* Navbar: keep everything on one line and shed secondary items on narrower screens */
+.top-navbar-left, .top-navbar-right { min-width: 0; }
+.threat-pulse-pill, .tagline-badge, .navbar-clock, .top-navbar .btn { white-space: nowrap; flex-shrink: 0; }
+@media (max-width: 1480px) { .tagline-badge { display: none !important; } }
+@media (max-width: 1240px) { .navbar-clock { display: none !important; } }
+@media (max-width: 1100px) {
+  .navbar-search { min-width: 150px !important; }
+  .threat-pulse-pill span { max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+}

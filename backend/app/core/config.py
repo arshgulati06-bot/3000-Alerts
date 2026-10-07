@@ -23,6 +23,13 @@ class Settings(BaseSettings):
     DEMO_FALLBACK_URL: str = "sqlite:///./sworders_demo.db"
     SEED_DEMO_DATA: bool = True
 
+    # Demo authentication. If SECRET_KEY is unset, a random key is generated per
+    # process (sessions then end when the API restarts). Never commit a real key.
+    SECRET_KEY: Optional[str] = None
+    ACCESS_TOKEN_TTL_MINUTES: int = 12 * 60
+    DEMO_USER_EMAIL: str = "analyst@sworders.demo"
+    DEMO_USER_PASSWORD: str = "SwordersDemo2026"
+
     # Azure OpenAI settings (Future Phase 4)
     AZURE_OPENAI_ENDPOINT: Optional[str] = None
     AZURE_OPENAI_API_KEY: Optional[str] = None

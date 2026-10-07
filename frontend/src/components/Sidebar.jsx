@@ -9,10 +9,16 @@ import {
   Server, 
   Activity, 
   UserCheck,
-  ChevronRight
+  ChevronRight,
+  LogOut
 } from 'lucide-react';
 
-export default function Sidebar({ currentTab, onSelectTab, criticalCount = 2, totalIncidents = 14 }) {
+function formatCount(n) {
+  return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+}
+
+export default function Sidebar({ currentTab, onSelectTab, criticalCount = 0, totalIncidents = 0, alertCount = 0, user, offline, onLogout }) {
+  const initials = (user?.full_name || 'Offline Demo').split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
   const navSections = [
     {
       title: 'OVERVIEW',
@@ -23,7 +29,7 @@ export default function Sidebar({ currentTab, onSelectTab, criticalCount = 2, to
     {
       title: 'INVESTIGATE',
       items: [
-        { id: 'alerts', label: 'Alert Queue', icon: Radio, badge: '3.1k', badgeType: 'info' },
+        { id: 'alerts', label: 'Alert Queue', icon: Radio, badge: alertCount ? formatCount(alertCount) : null, badgeType: 'info' },
         { id: 'incidents', label: 'Incidents', icon: Flame, badge: criticalCount > 0 ? `${criticalCount} CRIT` : null, badgeType: 'critical' },
         { id: 'investigation', label: 'Investigation Workspace', icon: Microscope, badge: null },
       ],
@@ -31,13 +37,13 @@ export default function Sidebar({ currentTab, onSelectTab, criticalCount = 2, to
     {
       title: 'INTELLIGENCE',
       items: [
-        { id: 'mitre', label: 'MITRE ATT&CK', icon: Grid3X3, badge: 'Enterprise' },
+        { id: 'mitre', label: 'MITRE ATT&CK', icon: Grid3X3, badge: null },
       ],
     },
     {
       title: 'SYSTEM',
       items: [
-        { id: 'status', label: 'System Status', icon: Server, badge: 'Live' },
+        { id: 'status', label: 'System Status', icon: Server, badge: offline ? 'Demo' : 'Live' },
       ],
     },
   ];
@@ -103,17 +109,20 @@ export default function Sidebar({ currentTab, onSelectTab, criticalCount = 2, to
             fontWeight: '600',
             fontSize: '12px'
           }}>
-            AM
+            {initials}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: '12px', fontWeight: '600', color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              Alex Mercer
+              {user?.full_name || 'Offline demo session'}
             </div>
             <div style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981' }}></span>
-              Tier-2 Analyst (Shift A)
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: offline ? '#eab308' : '#10b981' }}></span>
+              {offline ? 'Not signed in' : (user?.role || 'SOC Analyst')}
             </div>
           </div>
+          <button className="sidebar-logout" onClick={onLogout} title={offline ? 'Exit offline mode' : 'Sign out'} aria-label="Sign out">
+            <LogOut size={15} />
+          </button>
         </div>
       </div>
     </aside>

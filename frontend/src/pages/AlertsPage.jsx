@@ -17,12 +17,15 @@ import {
 
 const PAGE_SIZE = 25;
 
-export default function AlertsPage({ alerts = [], incidents = [], isLive, onOpenIngestModal, onInvestigate }) {
+export default function AlertsPage({ alerts = [], incidents = [], isLive, onOpenIngestModal, onInvestigate, searchQuery = '', onSearchChange }) {
   const [sourceFilter, setSourceFilter] = useState('all');
   const [page, setPage] = useState(1);
   const sources = [...new Set(alerts.map(a => a.raw_data?.source).filter(Boolean))].sort();
   const incidentFor = (alert) => incidents.find(i => i.asset_id && i.asset_id === alert?.asset_id);
-  const [search, setSearch] = useState('');
+  const [search, setSearchState] = useState(searchQuery);
+  // Keep in sync with the global navbar search box
+  useEffect(() => { setSearchState(searchQuery); setPage(1); }, [searchQuery]);
+  const setSearch = (value) => { setSearchState(value); onSearchChange?.(value); };
   const [severityFilter, setSeverityFilter] = useState('all');
   const [eventTypeFilter, setEventTypeFilter] = useState('all');
   const [selectedAlert, setSelectedAlert] = useState(null);

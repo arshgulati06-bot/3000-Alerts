@@ -1,10 +1,15 @@
+import logging
 import math
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from backend.app.core.database import get_db
 from backend.app.models.incident import Incident
+from backend.app.models.user import User
+from backend.app.routes.auth import get_current_user
 from backend.app.schemas.incident import IncidentDetailResponse, IncidentListResponse, IncidentStatusUpdate
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/incidents", tags=["Incidents"])
 
@@ -87,6 +92,7 @@ def get_incident(
     description="Transitions an incident through the analyst workflow (new → investigating → contained → resolved).",
     responses={
         200: {"description": "Incident updated."},
+        401: {"description": "Authentication required."},
         404: {"description": "Incident not found."},
         422: {"description": "Invalid status value."},
     },
@@ -95,6 +101,7 @@ def update_incident_status(
     incident_id: int,
     update: IncidentStatusUpdate,
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> Incident:
     """Update the workflow status of an incident."""
     incident = db.query(Incident).filter(Incident.id == incident_id).first()
@@ -104,6 +111,7 @@ def update_incident_status(
             detail=f"Incident with ID {incident_id} not found.",
         )
     incident.status = update.status
+    logger.info("Incident %s status -> %s by %s", incident.incident_key, update.status, user.email)
     db.commit()
     db.refresh(incident)
     return incident

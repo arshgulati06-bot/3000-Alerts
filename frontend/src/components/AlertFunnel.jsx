@@ -9,7 +9,8 @@ import {
   TrendingDown
 } from 'lucide-react';
 
-export default function AlertFunnel({ rawAlerts = 3142, correlatedCount = 14, criticalCount = 2 }) {
+export default function AlertFunnel({ rawAlerts = 0, correlatedCount = 0, criticalCount = 0 }) {
+  const reduction = rawAlerts ? (100 - (correlatedCount / rawAlerts) * 100).toFixed(1) : '0.0';
   return (
     <div className="funnel-container">
       <div className="funnel-header">
@@ -19,7 +20,7 @@ export default function AlertFunnel({ rawAlerts = 3142, correlatedCount = 14, cr
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#34d399', fontWeight: '600' }}>
           <TrendingDown size={13} />
-          <span>99.5% Noise Reduction (Analyst Time Saved: 87%)</span>
+          <span>{reduction}% fewer items to triage ({rawAlerts} alerts → {correlatedCount} incidents)</span>
         </div>
       </div>
 

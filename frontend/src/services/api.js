@@ -3,15 +3,103 @@ import { MOCK_ALERTS_STREAM, MOCK_INCIDENTS, MOCK_KPIS } from '../data/mockData'
 const API_BASE_URL = '/api';
 const TIMEOUT_MS = 5000;
 
-/** fetch with timeout so a hung backend never freezes the UI */
+const TOKEN_KEY = 'sworders_token';
+const USER_KEY = 'sworders_user';
+
+function storage() {
+  try { return window.localStorage; } catch { return null; }
+}
+
+export function getStoredSession() {
+  try {
+    const token = storage()?.getItem(TOKEN_KEY);
+    const user = JSON.parse(storage()?.getItem(USER_KEY) || 'null');
+    return token ? { token, user } : null;
+  } catch {
+    return null;
+  }
+}
+
+function storeSession(token, user) {
+  try {
+    storage()?.setItem(TOKEN_KEY, token);
+    storage()?.setItem(USER_KEY, JSON.stringify(user));
+  } catch { /* private mode: session lasts for this tab only */ }
+}
+
+export function clearSession() {
+  try {
+    storage()?.removeItem(TOKEN_KEY);
+    storage()?.removeItem(USER_KEY);
+  } catch { /* ignore */ }
+}
+
+/** fetch with timeout so a hung backend never freezes the UI; attaches the bearer token */
 async function apiFetch(path, options = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const token = getStoredSession()?.token;
+  const headers = { Accept: 'application/json', ...(options.headers || {}) };
+  if (token) headers.Authorization = `Bearer ${token}`;
   try {
-    return await fetch(`${API_BASE_URL}${path}`, { ...options, signal: controller.signal });
+    return await fetch(`${API_BASE_URL}${path}`, { ...options, headers, signal: controller.signal });
+  } catch (err) {
+    if (err.name === 'AbortError') throw new Error('The SOC API did not respond in time.');
+    throw new Error('Cannot reach the SOC API. Is the backend running on port 8000?');
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** Turn any FastAPI error body into one readable sentence (never a stack trace). */
+async function readError(res) {
+  const body = await res.json().catch(() => null);
+  // Dev proxy answers with an empty 5xx when the FastAPI process is down
+  if (!body && res.status >= 500) return 'Cannot reach the SOC API. Is the backend running on port 8000?';
+  if (!body) return `Request failed (HTTP ${res.status}).`;
+  if (Array.isArray(body.details) && body.details.length) {
+    return body.details.map(d => `${String(d.field || '').split(' -> ').pop()}: ${d.message}`).join('; ');
+  }
+  if (typeof body.detail === 'string') return body.detail;
+  if (res.status >= 500) return 'The SOC API hit an internal error. Please retry.';
+  return body.message || `Request failed (HTTP ${res.status}).`;
+}
+
+/** SQLite returns naive ISO timestamps; they are UTC, so make that explicit for the browser. */
+function utc(ts) {
+  if (typeof ts !== 'string') return ts;
+  return /([zZ]|[+-]\d\d:?\d\d)$/.test(ts) ? ts : `${ts}Z`;
+}
+
+function normalizeAlert(a) {
+  return { ...a, timestamp: utc(a.timestamp), created_at: utc(a.created_at) };
+}
+
+// ---------------------------------------------------------------------------
+// Authentication (demo analyst accounts — POST /api/auth/*)
+// ---------------------------------------------------------------------------
+async function authRequest(path, payload) {
+  const res = await apiFetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(await readError(res));
+  const json = await res.json();
+  if (!json?.access_token || !json?.user) throw new Error('Unexpected response from the authentication service.');
+  storeSession(json.access_token, json.user);
+  return json.user;
+}
+
+export const login = (email, password) => authRequest('/auth/login', { email, password });
+export const register = (fullName, email, password) => authRequest('/auth/register', { full_name: fullName, email, password });
+
+/** Validate a stored token. Returns user, null (invalid/expired) or throws if the API is unreachable. */
+export async function fetchCurrentUser() {
+  const res = await apiFetch('/auth/me');
+  if (res.status === 401) { clearSession(); return null; }
+  if (!res.ok) throw new Error(await readError(res));
+  return res.json();
 }
 
 /** Map backend status vocabulary onto the analyst workflow: NEW → INVESTIGATING → CONTAINED → RESOLVED */
@@ -47,10 +135,12 @@ function enrichIncident(apiIncident) {
     };
   }
   merged.status = normalizeStatus(merged.status);
+  merged.created_at = utc(merged.created_at);
+  merged.updated_at = utc(merged.updated_at);
   return merged;
 }
 
-/** Update incident workflow status (PATCH /api/incidents/{id}). Returns true if persisted. */
+/** Update incident workflow status (PATCH /api/incidents/{id}). Returns { ok, status, error }. */
 export async function updateIncidentStatus(id, status) {
   try {
     const res = await apiFetch(`/incidents/${id}`, {
@@ -58,9 +148,10 @@ export async function updateIncidentStatus(id, status) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status }),
     });
-    return res.ok;
-  } catch {
-    return false;
+    if (res.ok) return { ok: true, status: res.status };
+    return { ok: false, status: res.status, error: await readError(res) };
+  } catch (err) {
+    return { ok: false, status: 0, error: err.message };
   }
 }
 
@@ -69,10 +160,7 @@ export async function updateIncidentStatus(id, status) {
  */
 export async function checkHealth() {
   try {
-    const res = await apiFetch(`/health`, {
-      method: 'GET',
-      headers: { 'Accept': 'application/json' },
-    });
+    const res = await apiFetch(`/health`);
     if (res.ok) {
       const data = await res.json();
       return { connected: true, data };
@@ -87,7 +175,7 @@ export async function checkHealth() {
  * Fetch alerts list with fallback to mock data
  */
 export async function fetchAlerts(params = {}) {
-  try {
+  if (!params.offline) try {
     const query = new URLSearchParams();
     if (params.page) query.append('page', params.page);
     if (params.page_size) query.append('page_size', params.page_size);
@@ -101,7 +189,7 @@ export async function fetchAlerts(params = {}) {
       // If backend returns items, merge or use backend items; if empty (Phase 1 fresh db), provide rich dataset
       if (!Array.isArray(json.items)) throw new Error('Malformed /api/alerts response');
       const live = json.items.length > 0;
-      const items = live ? json.items : MOCK_ALERTS_STREAM;
+      const items = live ? json.items.map(normalizeAlert) : MOCK_ALERTS_STREAM;
       return {
         items,
         total: live ? json.total : items.length,
@@ -148,12 +236,8 @@ export async function ingestAlert(alertPayload) {
       body: JSON.stringify(alertPayload),
     });
 
-    if (!res.ok) {
-      const errorJson = await res.json().catch(() => ({}));
-      throw new Error(errorJson.detail || errorJson.message || `HTTP ${res.status}`);
-    }
-
-    return await res.json();
+    if (!res.ok) throw new Error(await readError(res));
+    return normalizeAlert(await res.json());
   } catch (err) {
     console.error('Failed to post alert to /api/alerts:', err);
     throw err;
@@ -164,7 +248,7 @@ export async function ingestAlert(alertPayload) {
  * Fetch correlated incidents
  */
 export async function fetchIncidents(params = {}) {
-  try {
+  if (!params.offline) try {
     const query = new URLSearchParams();
     if (params.status) query.append('status', params.status);
     if (params.priority) query.append('priority', params.priority);
@@ -224,4 +308,18 @@ export async function fetchIncidentById(id) {
  */
 export async function fetchKPIs() {
   return MOCK_KPIS;
+}
+
+/** Live GET probes used by the System Status page. Returns HTTP status per endpoint (0 = no response). */
+export async function probeReadEndpoints() {
+  const probe = async (path) => {
+    try { return (await apiFetch(path)).status; } catch { return 0; }
+  };
+  const [alerts, incidents] = await Promise.all([probe('/alerts?page_size=1'), probe('/incidents?page_size=1')]);
+  let incident = 0;
+  try {
+    const list = await (await apiFetch('/incidents?page_size=1')).json();
+    incident = list.items?.[0] ? await probe(`/incidents/${list.items[0].id}`) : 404;
+  } catch { incident = 0; }
+  return { alerts, incidents, incident };
 }

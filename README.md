@@ -13,53 +13,62 @@ Security Operations Centers (SOCs) are overwhelmed. A single tier-1 security ana
 
 ---
 
-## 📌 CURRENT SCOPE
+## 📌 CURRENT SCOPE (Hackathon Demo Build)
 
-> [!IMPORTANT]
-> **This repository is currently at Phase 1: Backend Foundation.**
->
-> In accordance with Hackathon Phase 1 requirements:
-> - ✅ REST API Architecture (FastAPI + Pydantic v2 + SQLAlchemy 2.x)
-> - ✅ Core Database Models (`alerts`, `incidents`, `investigations`)
-> - ✅ Alert Ingestion (`POST /api/alerts`) & Querying (`GET /api/alerts`)
-> - ✅ Incident Retrieval (`GET /api/incidents`, `GET /api/incidents/{id}`)
-> - ✅ Health Check Endpoint with Graceful Database Error Handling (`GET /api/health`)
-> - ✅ Complete Pydantic Validation & Sanitized Error Responses
-> - ✅ Interactive Swagger API Documentation (`/docs`)
-> - ✅ Unit & Integration Test Suite (`pytest`)
->
-> **Explicitly NOT Implemented Yet (Reserved for Subsequent Phases):**
-> - ❌ Correlation engine heuristics (`services/correlation_service.py` — Phase 2)
-> - ❌ Explainable risk scoring calculations (`services/risk_service.py` — Phase 3)
-> - ❌ MITRE ATT&CK taxonomy mapper (`services/mitre_service.py` — Phase 3)
-> - ❌ Azure OpenAI LLM summarization (`services/ai_service.py` — Phase 4)
-> - ❌ React SOC Dashboard UI (`frontend/` — Phase 5)
+**Working end to end:**
+- ✅ FastAPI backend (Pydantic v2, SQLAlchemy 2.x) — alerts, incidents, investigations, users
+- ✅ Demo authentication — sign in / create account / session restore / sign out (`/api/auth/*`)
+- ✅ Alert ingestion (`POST /api/alerts`) and querying (`GET /api/alerts`)
+- ✅ Incidents with persisted workflow: NEW → INVESTIGATING → CONTAINED → RESOLVED (`PATCH /api/incidents/{id}`, sign-in required)
+- ✅ React + Vite SOC console: Dashboard, Alert Queue, Incidents, Investigation Workspace, MITRE ATT&CK coverage, System Status
+- ✅ Explainable, rule-based investigation analysis and MITRE ATT&CK mapping (in the frontend, `src/data/socKnowledge.js`)
+- ✅ PostgreSQL with automatic SQLite fallback + automatic simulated demo data
+- ✅ Pytest suite (16 tests) and a passing production frontend build
+
+**Simulated / not yet implemented (be explicit in the demo):**
+- ⚠️ All alerts, hosts, IPs and incidents are **simulated** demo data.
+- ⚠️ Incident correlation is pre-computed in the seed data (no live correlation engine yet).
+- ⚠️ Recommended response actions (isolate host, revoke sessions, block IP…) are a **checklist only** — nothing is executed against real systems.
+- ⚠️ No external AI model is called. The "AI-assisted" panel is labelled *Explainable · rule-based*; Azure OpenAI is a reserved integration point.
+- ⚠️ Mean Time to Respond on the dashboard is a labelled demo baseline, not a measurement.
 
 ---
 
 ## 🚀 Run the Demo (Mentor Evaluation)
 
+**Prerequisites:** Python 3.11+ and Node.js 18+. PostgreSQL is optional.
+
 ```bash
-# 1. Backend (FastAPI) — from repo root
+# 1. Backend (FastAPI) — from the repo root
 pip install -r backend/requirements.txt
-python backend/run.py                 # http://localhost:8000  (Swagger: /docs)
+python backend/run.py                 # http://localhost:8000   Swagger UI: http://localhost:8000/docs
 
 # 2. Frontend (React + Vite) — second terminal
-cd frontend && npm install && npm run dev   # http://localhost:3000 (proxies /api → :8000)
+cd frontend && npm install && npm run dev   # http://localhost:3000  (proxies /api → :8000)
 
 # Tests
-python -m pytest                      # backend
-cd frontend && npm run build          # frontend build check
+python -m pytest                      # backend (from repo root)
+cd frontend && npm run build          # frontend production build
 ```
 
-**Demo safety nets (no setup required):**
-- If PostgreSQL is unreachable, the API automatically falls back to a local SQLite file (`sworders_demo.db`) — `/api/health` reports `"mode": "demo-fallback"`. Disable with `DEMO_DB_FALLBACK=false`.
-- An empty database is seeded with **clearly simulated** alerts, incidents and investigations (`backend/app/services/demo_seed.py`). Disable with `SEED_DEMO_DATA=false`.
-- If the backend is down, the UI keeps working on its bundled dataset and labels every view **DEMO DATA**.
+**Demo sign-in:** `analyst@sworders.demo` / `SwordersDemo2026` (created automatically on first start; override with
+`DEMO_USER_EMAIL` / `DEMO_USER_PASSWORD`). You can also use **Create account**.
 
-**Demo flow:** Dashboard → Alert Queue → *Investigate* on a critical alert → Investigation Workspace (overview, attack timeline, evidence, MITRE ATT&CK, AI-assisted analysis, recommended response) → move the incident NEW → INVESTIGATING → CONTAINED → RESOLVED (persisted via `PATCH /api/incidents/{id}`) → System Status.
+**Database / demo mode (no setup required):**
+- If PostgreSQL (`DATABASE_URL`) is unreachable, the API automatically uses a local SQLite file `sworders_demo.db`;
+  `/api/health` and the System Status page then show **DEMO MODE (SQLite fallback)**. Disable with `DEMO_DB_FALLBACK=false`.
+- An empty database is seeded with clearly simulated alerts, incidents and investigations, shifted so the scenario falls
+  in the last 24 hours. Disable with `SEED_DEMO_DATA=false`.
+- **Reset the demo:** stop the backend, delete `sworders_demo.db`, start it again.
+- If the backend is down, the login page offers **Continue in offline demo mode**; every view then shows **DEMO DATA**
+  and status changes are not saved.
+- Sessions are signed with `SECRET_KEY`. If it is not set, a random key is generated at startup, so restarting the
+  backend signs everyone out.
 
-**AI honesty note:** the investigation panel is an *explainable rule-based* analysis over correlated evidence (`frontend/src/data/socKnowledge.js`). No external LLM is called; Azure OpenAI plugs into the same output contract when configured.
+**Demo flow:** Sign in → Dashboard → Alert Queue → *Investigate* on critical alert `ALT-98211` → Investigation Workspace
+(overview, attack timeline, evidence, related alerts, risk score, affected systems, MITRE ATT&CK, explainable analysis,
+recommended response) → **Mark Investigating → Mark Contained → Resolve Incident** (saved to the database, survives page
+refresh) → MITRE ATT&CK → System Status → Sign out.
 
 ---
 
@@ -256,6 +265,10 @@ Once running, navigate to:
 | `GET` | `/api/alerts` | List alerts with pagination & filtering | `200` |
 | `GET` | `/api/incidents` | List correlated incidents | `200` |
 | `GET` | `/api/incidents/{id}` | Get incident details & investigation | `200` / `404` |
+| `PATCH` | `/api/incidents/{id}` | Change workflow status (bearer token required) | `200` / `401` / `404` / `422` |
+| `POST` | `/api/auth/login` | Sign in, returns bearer token | `200` / `401` / `422` |
+| `POST` | `/api/auth/register` | Create analyst account, returns bearer token | `201` / `409` / `422` |
+| `GET` | `/api/auth/me` | Current analyst for a bearer token | `200` / `401` |
 
 ---
 

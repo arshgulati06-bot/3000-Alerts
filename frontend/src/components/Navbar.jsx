@@ -11,7 +11,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 
-export default function Navbar({ backendStatus, onOpenIngestModal, onSearch, searchQuery }) {
+export default function Navbar({ backendStatus, onOpenIngestModal, onSearch, searchQuery, criticalCount = 0 }) {
   const [timeStr, setTimeStr] = useState('');
 
   useEffect(() => {
@@ -34,16 +34,16 @@ export default function Navbar({ backendStatus, onOpenIngestModal, onSearch, sea
         </div>
 
         {/* Global Filter / Search Input */}
-        <div style={{
+        <div className="navbar-search" style={{
           position: 'relative',
           display: 'flex',
           alignItems: 'center',
-          minWidth: '240px'
+          minWidth: '200px'
         }}>
           <Search size={14} style={{ position: 'absolute', left: '10px', color: 'var(--text-muted)' }} />
           <input
             type="text"
-            placeholder="Search IoC, IP, Asset, CVE..."
+            placeholder="Search alerts: IP, asset, user, IoC…"
             value={searchQuery || ''}
             onChange={(e) => onSearch && onSearch(e.target.value)}
             style={{
@@ -67,9 +67,9 @@ export default function Navbar({ backendStatus, onOpenIngestModal, onSearch, sea
       {/* Right side: Threat Pulse, Time, Backend Status, Ingest Action */}
       <div className="top-navbar-right">
         {/* Signature Sworders Threat Pulse */}
-        <div className="threat-pulse-pill" title="Real-time Threat Correlation Engine Active">
-          <div className="pulse-dot"></div>
-          <span>THREAT PULSE: ELEVATED (2 CRITICAL)</span>
+        <div className="threat-pulse-pill" title="Open critical incidents (not yet contained or resolved)" style={criticalCount ? undefined : { color: '#34d399', borderColor: 'var(--sev-healthy-border)', background: 'var(--sev-healthy-bg)' }}>
+          <div className="pulse-dot" style={criticalCount ? undefined : { background: '#10b981', boxShadow: 'none' }}></div>
+          <span>THREAT PULSE: {criticalCount ? `ELEVATED (${criticalCount} CRITICAL)` : 'NOMINAL'}</span>
         </div>
 
         {/* Backend Database Live Status Pill */}
@@ -82,14 +82,15 @@ export default function Navbar({ backendStatus, onOpenIngestModal, onSearch, sea
           borderRadius: 'var(--radius-md)',
           background: 'var(--bg-surface-2)',
           border: '1px solid var(--border-subtle)',
-          color: backendStatus?.connected ? '#34d399' : '#facc15'
+          color: backendStatus?.connected ? '#34d399' : '#facc15',
+          whiteSpace: 'nowrap'
         }}>
           <Database size={12} />
-          <span>{backendStatus?.connected ? 'API Online' : 'Local Telemetry'}</span>
+          <span>{backendStatus?.connected ? 'API Online' : 'API Offline · Demo Data'}</span>
         </div>
 
         {/* Live UTC Clock */}
-        <div style={{
+        <div className="navbar-clock" style={{
           display: 'flex',
           alignItems: 'center',
           gap: '6px',
